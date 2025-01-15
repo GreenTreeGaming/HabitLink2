@@ -79,7 +79,7 @@ export async function checkReminders() {
     const habits = await db.collection("habits").find().toArray();
     console.log(`[Notification System] Found ${habits.length} habits to check.`);
 
-    const reminders = [];
+    const reminders: string[] = [];
 
     for (const habit of habits) {
       console.log(`[Notification System] Checking habit "${habit.name}" with reminderTime "${habit.reminderTime}".`);
