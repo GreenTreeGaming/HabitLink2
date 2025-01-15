@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation"; // Import useRouter
-import { FaHistory, FaHome, FaUsers } from "react-icons/fa"; // Import the icons
+import { useRouter } from "next/navigation";
+import { FaHistory, FaHome, FaUsers, FaTrophy, FaMedal, FaStar, FaVideo } from "react-icons/fa"; // Import FaMedal for Badges
+import { toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 export default function Sidebar() {
   const [isOpen, setIsOpen] = useState(false);
@@ -14,7 +16,7 @@ export default function Sidebar() {
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="p-2 bg-green-500 text-white rounded-md fixed top-4 left-4 z-50"
+          className="bg-green-500 text-white rounded-md fixed top-4 left-4 z-50 px-4 py-2"
           aria-label="Toggle menu"
         >
           ☰
@@ -31,7 +33,7 @@ export default function Sidebar() {
           {/* Close Button */}
           <button
             onClick={() => setIsOpen(false)}
-            className="absolute top-4 right-4 text-green-500 bg-green-100 rounded-md p-2 hover:bg-green-200"
+            className="absolute top-4 right-4 text-green-500 bg-green-100 rounded-md px-4 py-2 hover:bg-green-200"
             aria-label="Close menu"
           >
             ✕
@@ -79,6 +81,45 @@ export default function Sidebar() {
               >
                 <FaUsers className="text-green-600" /> {/* Your Team Icon */}
                 <span>Your Team</span>
+              </button>
+            </li>
+            {/* Leaderboard Button */}
+            <li>
+              <button
+                onClick={() => {
+                  setIsOpen(false); // Close the sidebar
+                  router.push("/leaderboard"); // Navigate to Leaderboard
+                }}
+                className="flex items-center gap-3 w-full text-left px-4 py-2 bg-green-100 rounded-lg hover:bg-green-200"
+              >
+                <FaTrophy className="text-green-600" /> {/* Leaderboard Icon */}
+                <span>Leaderboard</span>
+              </button>
+            </li>
+            {/* Badges Button */}
+            <li>
+              <button
+                onClick={() => {
+                  setIsOpen(false); // Close the sidebar
+                  router.push("/badges"); // Navigate to Badges
+                }}
+                className="flex items-center gap-3 w-full text-left px-4 py-2 bg-green-100 rounded-lg hover:bg-green-200"
+              >
+                <FaMedal className="text-green-600" /> {/* Badges Icon */}
+                <span>Badges</span>
+              </button>
+            </li>
+            {/*Tutorials */}
+            <li>
+              <button
+                onClick={() => {
+                  setIsOpen(false); // Close the sidebar
+                  router.push("/tutorials"); // Navigate to Badges
+                }}
+                className="flex items-center gap-3 w-full text-left px-4 py-2 bg-green-100 rounded-lg hover:bg-green-200"
+              >
+                <FaVideo className="text-green-600" /> {/* Badges Icon */}
+                <span>Operational Tutorials</span>
               </button>
             </li>
           </ul>

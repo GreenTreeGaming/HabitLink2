@@ -3,7 +3,6 @@ import clientPromise from "../../../lib/mongodb";
 import { ObjectId } from "mongodb";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { calculateDefaultReminder } from "@/lib/habitUtils";
 
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
@@ -59,7 +58,9 @@ export async function POST(req: Request) {
   const db = client.db("habitlink");
 
   try {
-    const { habitName, goal, frequency } = await req.json();
+    const { habitName, goal, frequency, unit } = await req.json();
+
+    console.log("Received Payload:", { habitName, goal, frequency, unit }); // Debugging log
 
     // Validation logic
     if (!habitName || typeof habitName !== "string" || habitName.trim() === "") {
@@ -74,24 +75,30 @@ export async function POST(req: Request) {
       return new Response(JSON.stringify({ error: "Invalid frequency value" }), { status: 400 });
     }
 
+    if (!unit || typeof unit !== "string" || unit.trim() === "") {
+      return new Response(JSON.stringify({ error: "Invalid unit" }), { status: 400 });
+    }
+
     const createdAt = new Date();
 
-    // Calculate default reminder time based on frequency
-    const reminderTime = calculateDefaultReminder(frequency, createdAt);
-    console.log(`[POST Habit] Calculated reminder time: ${reminderTime}`);
+    // Set initial reminder time for testing: 5 seconds after creation
+    const reminderTime = new Date();
+    reminderTime.setSeconds(reminderTime.getHours() + 1);
 
     const habit = {
       name: habitName,
       goal,
       frequency,
-      progress: 0, // Initialize progress to 0
+      unit, // Save the unit
+      progress: 0,
       userId: session.user.id,
       createdAt,
-      reminderTime, // Add reminder time
+      reminderTime: reminderTime.toISOString(),
       completed: false,
     };
 
     const result = await db.collection("habits").insertOne(habit);
+    console.log("Saved Habit to Database:", habit); // Debugging log
 
     return new Response(JSON.stringify({ status: "success", habitId: result.insertedId }), { status: 201 });
   } catch (error) {
@@ -103,6 +110,65 @@ export async function POST(req: Request) {
   }
 }
 
+// export async function POST(req: Request) {
+//   const session = await getServerSession(authOptions);
+//   if (!session) {
+//     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
+//   }
+
+//   const client = await clientPromise;
+//   const db = client.db("habitlink");
+
+//   try {
+//     const { habitName, goal, frequency, habitUnit } = await req.json();
+
+//     // Validation logic
+//     if (!habitName || typeof habitName !== "string" || habitName.trim() === "") {
+//       return new Response(JSON.stringify({ error: "Invalid habit name" }), { status: 400 });
+//     }
+
+//     if (!goal || typeof goal !== "number" || goal <= 0) {
+//       return new Response(JSON.stringify({ error: "Invalid goal value" }), { status: 400 });
+//     }
+
+//     if (!frequency || !["daily", "weekly", "monthly"].includes(frequency)) {
+//       return new Response(JSON.stringify({ error: "Invalid frequency value" }), { status: 400 });
+//     }
+
+//     if (!habitUnit || typeof habitUnit !== "string" || habitUnit.trim() === "") {
+//       return new Response(JSON.stringify({ error: "Invalid unit of measure" }), { status: 400 });
+//     }
+
+//     const createdAt = new Date();
+
+//     // Calculate default reminder time based on frequency
+//     const reminderTime = calculateDefaultReminder(frequency, createdAt);
+//     console.log(`[POST Habit] Calculated reminder time: ${reminderTime}`);
+
+//     const habit = {
+//       name: habitName,
+//       goal,
+//       frequency,
+//       unit: habitUnit, // Include the unit in the habit object
+//       progress: 0, // Initialize progress to 0
+//       userId: session.user.id,
+//       createdAt,
+//       reminderTime, // Add reminder time
+//       completed: false,
+//     };
+
+//     const result = await db.collection("habits").insertOne(habit);
+
+//     return new Response(JSON.stringify({ status: "success", habitId: result.insertedId }), { status: 201 });
+//   } catch (error) {
+//     console.error("Error in POST /api/habits:", error);
+//     return new Response(
+//       JSON.stringify({ error: "An unexpected error occurred." }),
+//       { status: 500 }
+//     );
+//   }
+// }
+
 export async function PATCH(req: Request) {
   try {
     const session = await getServerSession(authOptions);
@@ -111,9 +177,11 @@ export async function PATCH(req: Request) {
     const client = await clientPromise;
     const db = client.db("habitlink");
 
-    const { _id, increment } = await req.json();
-    if (!increment || increment < 0) {
-      return NextResponse.json({ error: "Invalid increment value" }, { status: 400 });
+    const { _id, increment, decrement } = await req.json();
+
+    // Validate input
+    if ((!increment && !decrement) || (increment && increment < 0) || (decrement && decrement < 0)) {
+      return NextResponse.json({ error: "Invalid increment or decrement value" }, { status: 400 });
     }
 
     const habit = await db.collection("habits").findOne({ _id: new ObjectId(_id), userId: session.user.id });
@@ -122,7 +190,13 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: "Habit not found" }, { status: 404 });
     }
 
-    const newProgress = (habit.progress || 0) + increment;
+    let newProgress = habit.progress || 0;
+
+    if (increment) {
+      newProgress += increment;
+    } else if (decrement) {
+      newProgress = Math.max(newProgress - decrement, 0); // Ensure progress doesn't go below 0
+    }
 
     const updatedFields: any = { progress: newProgress };
     if (newProgress >= habit.goal) {
@@ -146,16 +220,21 @@ export async function PATCH(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return new Response("Unauthorized", { status: 401 });
+  }
+
+  const client = await clientPromise;
+  const db = client.db("habitlink");
+
   try {
-    const session = await getServerSession(authOptions);
-    if (!session) {
-      return new Response("Unauthorized", { status: 401 });
-    }
-
-    const client = await clientPromise;
-    const db = client.db("habitlink");
-
     const { _id } = await req.json();
+
+    // Validate habit ID
+    if (!_id) {
+      return new Response("Habit ID is required", { status: 400 });
+    }
 
     const habit = await db.collection("habits").findOne({
       _id: new ObjectId(_id),
@@ -166,23 +245,33 @@ export async function DELETE(req: Request) {
       return new Response("Habit not found", { status: 404 });
     }
 
-    if (habit.progress >= habit.goal) {
-      await db.collection("pastHabits").insertOne({
-        ...habit,
-        archivedAt: new Date().toISOString(),
-      });
-    }
+    // Add habit to pastHabits collection
+    await db.collection("pastHabits").insertOne({
+      ...habit,
+      archivedAt: new Date().toISOString(),
+    });
 
+    // Increment the user's habitsFinished count
+    await db.collection("users").updateOne(
+      { email: session.user.email },
+      { $inc: { habitsFinished: 1 } }
+    );
+
+    // Delete the habit from the habits collection
     const result = await db.collection("habits").deleteOne({
       _id: new ObjectId(_id),
     });
 
-    return new Response(
-      JSON.stringify({ status: "success", deletedCount: result.deletedCount }),
-      { status: 200 }
-    );
+    if (result.deletedCount === 0) {
+      throw new Error("Failed to delete habit");
+    }
+
+    return new Response(JSON.stringify({ status: "success" }), { status: 200 });
   } catch (error) {
-    console.error(error);
-    return new Response(JSON.stringify({ status: "error", error: error.message }), { status: 500 });
+    console.error("Error in DELETE /api/habits:", error);
+    return new Response(
+      JSON.stringify({ error: "An unexpected error occurred" }),
+      { status: 500 }
+    );
   }
 }

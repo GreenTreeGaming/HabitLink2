@@ -21,6 +21,9 @@ export const authOptions = {
           email: user.email,
           name: user.name,
           image: user.image,
+          habitsFinished: 0, // Initialize habitsFinished to 0
+          badgesCollected: [], // Initialize badgesCollected as an empty array
+          createdAt: new Date(),
         });
       }
       return true;

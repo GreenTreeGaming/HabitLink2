@@ -1,5 +1,6 @@
 import { ObjectId } from "mongodb";
 import clientPromise from "./mongodb";
+import { toast } from "react-toastify";
 
 export async function recreateHabits() {
   const client = await clientPromise;
@@ -64,17 +65,7 @@ export async function recreateHabits() {
 
 export function calculateDefaultReminder(frequency: string, createdAt: Date): string {
   const reminder = new Date(createdAt);
-
-  if (frequency === "daily") {
-    reminder.setHours(18, 0, 0, 0); // 6 PM same day
-  } else if (frequency === "weekly") {
-    reminder.setDate(reminder.getDate() + 6); // 6th day of the 7-day cycle
-    reminder.setHours(18, 0, 0, 0); // 6 PM
-  } else if (frequency === "monthly") {
-    reminder.setDate(reminder.getDate() + 28); // 28th day of the 30-day cycle
-    reminder.setHours(18, 0, 0, 0); // 6 PM
-  }
-
+  reminder.setSeconds(reminder.getHours() + 1); // For testing: 5 seconds from now
   return reminder.toISOString();
 }
 
@@ -88,36 +79,34 @@ export async function checkReminders() {
     const habits = await db.collection("habits").find().toArray();
     console.log(`[Notification System] Found ${habits.length} habits to check.`);
 
+    const reminders = [];
+
     for (const habit of habits) {
       console.log(`[Notification System] Checking habit "${habit.name}" with reminderTime "${habit.reminderTime}".`);
 
       if (habit.reminderTime && new Date(habit.reminderTime) <= now) {
-        console.log(`[Notification System] Sending reminder for habit "${habit.name}" (ID: ${habit._id})`);
+        const toGo = habit.goal - habit.progress;
+        const reminderMessage = `Reminder: It's time to complete your habit "${habit.name}"! You only have ${toGo} ${habit.unit} left to go!`;
+        console.log(`[Notification System] Reminder: ${reminderMessage}`);
 
-        // Simulate sending a notification
-        console.log(`Reminder: It's time to complete your habit "${habit.name}"!`);
+        reminders.push(reminderMessage);
 
-        // Calculate the next reminder time for recurring habits
-        if (!habit.completed) {
-          const nextReminderTime = calculateDefaultReminder(habit.frequency, new Date());
-          console.log(
-            `[Notification System] Setting next reminderTime for habit "${habit.name}" to "${nextReminderTime}".`
-          );
-
-          await db.collection("habits").updateOne(
-            { _id: habit._id },
-            { $set: { reminderTime: nextReminderTime } }
-          );
-        } else {
-          // For completed habits, just clear the reminder
-          console.log(`[Notification System] Clearing reminderTime for completed habit "${habit.name}".`);
-          await db.collection("habits").updateOne({ _id: habit._id }, { $unset: { reminderTime: "" } });
-        }
+        const nextReminderTime = new Date();
+        nextReminderTime.setHours(nextReminderTime.getHours() + 1);
+        await db.collection("habits").updateOne(
+          { _id: habit._id },
+          { $set: { reminderTime: nextReminderTime.toISOString() } }
+        );
+        console.log(
+          `[Notification System] Setting next reminderTime for habit "${habit.name}" to "${nextReminderTime.toISOString()}".`
+        );
       }
     }
 
     console.log("[Notification System] Reminder check complete.");
+    return reminders; // Return reminders
   } catch (error) {
     console.error("[Notification System] Error during reminder check:", error);
+    return [];
   }
 }

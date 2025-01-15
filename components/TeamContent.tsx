@@ -99,7 +99,7 @@ export default function TeamContent({
                     <span>
                       {member.name} ({member.email})
                       {isCurrentUser && " (You)"}
-                      {isAdmin && " (Admin)"}
+                      {isAdmin && " (Team Captain)"}
                     </span>
                     {/* Show "Invite Members" button only for the admin */}
                     {isTeamCreator && isCurrentUser && (
@@ -158,14 +158,14 @@ export default function TeamContent({
                 ) : (
                   <>
                     <p className="text-gray-600 mb-4">
-                      As the team admin, you must select a new team admin before leaving.
+                      As the team captain, you must select a new team captain before leaving.
                     </p>
                     <select
                       value={newCaptainEmail}
                       onChange={(e) => setNewCaptainEmail(e.target.value)}
                       className="border border-gray-300 rounded-lg px-4 py-2 mb-4 w-full"
                     >
-                      <option value="">Select new admin</option>
+                      <option value="">Select new team captain</option>
                       {team.members
                         .filter((member) => member.email !== team.creatorEmail)
                         .map((member) => (

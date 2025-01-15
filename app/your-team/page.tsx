@@ -1,9 +1,16 @@
 "use client";
 
 import Sidebar from "@/components/Sidebar";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import TeamContent from "@/components/TeamContent";
+import {signOut } from "next-auth/react";
+import HabitProgressChart from "@/components/HabitProgressChart";
+import Confetti from "react-confetti";
+import SignIn from "@/components/SignIn";
+import Home from "../page";
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 interface User {
   id: string;
@@ -26,6 +33,14 @@ interface Invite {
   status: string;
 }
 
+interface Habit {
+  _id: string;
+  name: string;
+  goal: number;
+  progress: number;
+  createdAt: string; // Add the createdAt property
+}
+
 export default function YourTeam() {
   const [team, setTeam] = useState<Team | null>(null); // Stores the current user's team
   const [isCreatingTeam, setIsCreatingTeam] = useState(false); // To toggle the creation modal
@@ -38,8 +53,16 @@ export default function YourTeam() {
   const [newCaptainEmail, setNewCaptainEmail] = useState("");
   const [isChoosingNewAdmin, setIsChoosingNewAdmin] = useState(false);
   const [teamName, setTeamName] = useState("");
-
   const { data: session } = useSession();
+  const [habits, setHabits] = useState<Habit[]>([]);
+  const [habitName, setHabitName] = useState("");
+  const [habitGoal, setHabitGoal] = useState<number>(0);
+  const [habitUnit, setHabitUnit] = useState("");
+  const [showConfetti, setShowConfetti] = useState(false);
+  const [habitFrequency, setHabitFrequency] = useState("");
+  const [habitToDelete, setHabitToDelete] = useState<Habit | null>(null);
+  const shownReminders = useRef<Set<string>>(new Set());
+  const lastFetchedTime = useRef<number>(Date.now());
 
   useEffect(() => {
     console.log("Session Data:", session); // Logs session data
@@ -270,6 +293,7 @@ export default function YourTeam() {
         if (response === "accepted") {
           const updatedTeam = await res.json();
           setTeam(updatedTeam); // Update the team with the accepted invite
+          location.reload()
         }
         setInvites((prev) => prev.filter((invite) => invite._id !== inviteId)); // Remove processed invite
       } else {
@@ -311,6 +335,7 @@ export default function YourTeam() {
         handleInviteMembers={handleInviteMembers}
         setIsChoosingNewAdmin={setIsChoosingNewAdmin}
       />
+
     </main>
   );
 }

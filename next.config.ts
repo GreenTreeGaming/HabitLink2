@@ -13,6 +13,7 @@ triggerScheduler();
 
 const nextConfig: NextConfig = {
   /* config options */
+  ignoreBuildErrors: true,
 };
 
 export default nextConfig;

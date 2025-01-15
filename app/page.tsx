@@ -1,11 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSession, signOut } from "next-auth/react";
 import HabitProgressChart from "@/components/HabitProgressChart";
 import Confetti from "react-confetti";
 import SignIn from "@/components/SignIn";
 import Sidebar from "@/components/Sidebar";
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+
 
 interface Habit {
   _id: string;
@@ -20,9 +23,62 @@ export default function Home() {
   const [habits, setHabits] = useState<Habit[]>([]);
   const [habitName, setHabitName] = useState("");
   const [habitGoal, setHabitGoal] = useState<number>(0);
+  const [habitUnit, setHabitUnit] = useState("");
   const [showConfetti, setShowConfetti] = useState(false);
   const [habitFrequency, setHabitFrequency] = useState("");
   const [habitToDelete, setHabitToDelete] = useState<Habit | null>(null);
+  const shownReminders = useRef<Set<string>>(new Set());
+  const lastFetchedTime = useRef<number>(Date.now());
+
+
+  useEffect(() => {
+    const fetchReminders = async () => {
+      try {
+        const now = Date.now();
+
+        // Reset `shownReminders` every 5 minutes (300000ms)
+        if (now - lastFetchedTime.current > 3_600_000) {
+          shownReminders.current.clear();
+          lastFetchedTime.current = now;
+        }
+
+        const res = await fetch("/api/reminders");
+        if (!res.ok) throw new Error("Failed to fetch reminders");
+
+        const data = await res.json();
+        console.log("[fetchReminders] Received reminders:", data);
+
+        if (data.reminders && Array.isArray(data.reminders)) {
+          data.reminders.forEach((reminder) => {
+            if (!shownReminders.current.has(reminder)) {
+              // Show the toast
+              toast.info(reminder, {
+                position: "bottom-right",
+                autoClose: 5000,
+                hideProgressBar: false,
+                closeOnClick: true,
+                pauseOnHover: true,
+                draggable: true,
+                theme: "colored",
+              });
+
+              // Add to the shown reminders set
+              shownReminders.current.add(reminder);
+            }
+          });
+        }
+      } catch (error) {
+        console.error("Failed to fetch reminders:", error);
+      }
+    };
+
+    if (session) {
+      fetchReminders(); // Initial call
+      const intervalId = setInterval(fetchReminders, 3_600_000); // Poll every 5 seconds
+
+      return () => clearInterval(intervalId); // Cleanup on unmount
+    }
+  }, [session]);
 
   useEffect(() => {
     if (session) {
@@ -48,11 +104,8 @@ export default function Home() {
     }
   }, [session]);
 
-  const [goalType, setGoalType] = useState<string>("count");
-  const [timeFrame, setTimeFrame] = useState<string>("daily");
-
   const addHabit = async () => {
-    if (!habitName.trim() || habitGoal <= 0 || !["daily", "weekly", "monthly"].includes(timeFrame)) {
+    if (!habitName.trim() || !habitUnit.trim() || habitGoal <= 0 || !["daily", "weekly", "monthly"].includes(habitFrequency)) {
       alert("Please enter valid details for the habit.");
       return;
     }
@@ -64,7 +117,7 @@ export default function Home() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session?.user?.id}`,
         },
-        body: JSON.stringify({ habitName, goal: habitGoal, frequency: timeFrame }),
+        body: JSON.stringify({ habitName, unit: habitUnit, goal: habitGoal, frequency: habitFrequency }),
       });
 
       const result = await res.json();
@@ -73,8 +126,9 @@ export default function Home() {
           ...prev,
           {
             name: habitName,
+            unit: habitUnit,
             goal: habitGoal,
-            frequency: timeFrame,
+            frequency: habitFrequency,
             progress: 0,
             _id: result.habitId,
             createdAt: new Date().toISOString(),
@@ -132,9 +186,45 @@ export default function Home() {
     }
   };
 
+  const decrementProgress = async (id: string, amount: number) => {
+    const habit = habits.find((h) => h._id === id);
+    if (!habit || habit.progress <= 0) return;
+
+    setHabits((prev) =>
+      prev.map((h) =>
+        h._id === id ? { ...h, progress: Math.max(h.progress - amount, 0) } : h
+      )
+    );
+
+    try {
+      const res = await fetch("/api/habits", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session?.user?.id}`,
+        },
+        body: JSON.stringify({ _id: id, decrement: amount }),
+      });
+
+      const result = await res.json();
+      console.log("API Response:", result); // Log the API response
+
+      if (result.status !== "success") {
+        throw new Error(result.error || "Failed to decrement progress");
+      }
+    } catch (error) {
+      console.error("Error decrementing progress:", error);
+      alert("An error occurred while updating progress.");
+      setHabits((prev) =>
+        prev.map((h) =>
+          h._id === id ? { ...h, progress: Math.min(h.progress + amount, h.goal) } : h
+        )
+      );
+    }
+  };
+
   const deleteHabit = async (id: string) => {
-    // Optimistically update the UI by removing the habit
-    setHabits((prev) => prev.filter((habit) => habit._id !== id));
+    setHabits((prev) => prev.filter((habit) => habit._id !== id)); // Optimistic UI update
 
     try {
       const res = await fetch("/api/habits", {
@@ -163,62 +253,69 @@ export default function Home() {
     return <SignIn />;
   }
 
-
-
-
-
-
   return (
     <main className="flex flex-col items-center bg-gradient-to-b from-green-100 to-green-300 min-h-screen py-10 px-4">
       <Sidebar />
 
       {showConfetti && <Confetti width={window.innerWidth} height={window.innerHeight} />}
+      <ToastContainer position="bottom-right" pauseOnFocusLoss={false}/>
       <button
         onClick={() => signOut()}
         className="absolute top-4 right-4 px-4 py-2 bg-red-500 text-white rounded-lg"
       >
         Sign Out
       </button>
-      <div className="w-full max-w-4xl bg-white shadow-lg rounded-xl p-6">
+      <div className="w-full max-w-4xl bg-white shadow-lg rounded-xl p-6 flex-wrap">
         <h1 className="text-4xl font-bold text-green-600 mb-6 text-center">
           🌟 Welcome, {session.user?.name}
         </h1>
-        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6">
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 w-full mb-6">
           <input
             type="text"
-            placeholder="Enter habit name"
+            placeholder="Habit Name"
             value={habitName}
             onChange={(e) => setHabitName(e.target.value)}
-            className="flex-1 px-4 py-2 border border-green-300 rounded-lg"
+            className="px-4 py-2 border border-green-300 rounded-lg"
           />
           <input
             type="number"
-            placeholder="Enter goal"
+            placeholder="Amount"
             value={habitGoal}
             onChange={(e) => setHabitGoal(parseInt(e.target.value))}
-            className="flex-1 px-4 py-2 border border-green-300 rounded-lg"
+            className="px-4 py-2 border border-green-300 rounded-lg"
+          />
+          <input
+            type="text"
+            placeholder="Units"
+            value={habitUnit}
+            onChange={(e) => setHabitUnit(e.target.value)}
+            className="px-4 py-2 border border-green-300 rounded-lg"
           />
           <select
             value={habitFrequency}
             onChange={(e) => setHabitFrequency(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg mb-4"
+            className="px-2 py-2 border border-green-300 rounded-lg bg-white"
           >
+            <option value="" disabled>Select Frequency</option>
             <option value="daily">Daily</option>
             <option value="weekly">Weekly</option>
             <option value="monthly">Monthly</option>
           </select>
-          <button
-            onClick={addHabit}
-            className="px-6 py-2 bg-green-500 text-white font-semibold rounded-lg shadow hover:bg-green-600"
-          >
-            Add Habit
-          </button>
+          <div className="col-span-1 sm:col-span-2 lg:col-span-4 flex justify-center">
+            <button
+              onClick={addHabit}
+              className="w-full lg:w-auto px-6 py-2 bg-green-500 text-white font-semibold rounded-lg shadow hover:bg-green-600"
+            >
+              Add Habit
+            </button>
+          </div>
         </div>
         {habits.length === 0 ? (
           <p className="text-gray-600 text-center mt-4">
             No habits yet. Add one above!
           </p>
         ) : (
+
           <ul className="space-y-4">
             {habits.map((habit) => (
               <li
@@ -241,41 +338,56 @@ export default function Home() {
                   <p className="text-sm text-gray-400">
                     Created on: {new Date(habit.createdAt).toLocaleDateString()}
                   </p>
+                  {/* Add the occurrence text with icons */}
+                  <p className="text-sm text-gray-500 mt-1">
+                    Occurs: {habit.frequency === "daily" ? "☀️ Daily" : habit.frequency === "weekly" ? "📅 Weekly" : "🌙 Monthly"}
+                  </p>
                 </div>
-                <HabitProgressChart name={habit.name} progress={habit.progress} goal={habit.goal} />
-                <div className="flex flex-col sm:flex-row items-center gap-2">
-                  {habit.progress < habit.goal && (
-                    <div className="flex gap-2 items-center">
-                      <input
-                        type="number"
-                        placeholder="Amount"
-                        min="1"
-                        className="px-4 py-2 border border-gray-300 rounded-lg w-20"
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            const value = parseInt((e.target as HTMLInputElement).value);
-                            if (!isNaN(value) && value > 0) {
-                              incrementProgress(habit._id, value);
-                              (e.target as HTMLInputElement).value = ""; // Clear input
-                            }
-                          }
-                        }}
-                      />
-                      <button
-                        onClick={() => incrementProgress(habit._id, 1)} // Defaults to +1 if clicked
-                        className="px-4 py-2 bg-green-500 text-white font-semibold rounded-lg shadow hover:bg-green-600"
-                      >
-                        +1
-                      </button>
-                    </div>
-                  )}
-                  <button
-                    onClick={() => setHabitToDelete(habit)}
-                    className="px-4 py-2 bg-red-500 text-white font-semibold rounded-lg shadow hover:bg-red-600"
-                  >
-                    Delete
-                  </button>
-                </div>
+                <HabitProgressChart
+          name={habit.name}
+          progress={habit.progress}
+          goal={habit.goal}
+          unit={habit.unit}
+        />
+        <div className="flex flex-wrap gap-2 justify-center sm:justify-start mt-4">
+          {habit.progress < habit.goal && (
+            <div className="flex gap-2 items-center">
+              <input
+                type="number"
+                placeholder="#"
+                min="1"
+                className="px-4 py-2 border border-gray-300 rounded-lg w-20"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    const value = parseInt((e.target as HTMLInputElement).value);
+                    if (!isNaN(value) && value > 0) {
+                      incrementProgress(habit._id, value);
+                      (e.target as HTMLInputElement).value = ""; // Clear input
+                    }
+                  }
+                }}
+              />
+              <button
+                onClick={() => incrementProgress(habit._id, 1)}
+                className="px-4 py-2 bg-green-500 text-white font-semibold rounded-lg shadow hover:bg-green-600"
+              >
+                +1
+              </button>
+              <button
+                onClick={() => decrementProgress(habit._id, 1)}
+                className="px-4 py-2 bg-yellow-500 text-white font-semibold rounded-lg shadow hover:bg-yellow-600"
+              >
+                -1
+              </button>
+            </div>
+          )}
+          <button
+            onClick={() => setHabitToDelete(habit)}
+            className="px-4 py-2 bg-red-500 text-white font-semibold rounded-lg shadow hover:bg-red-600"
+          >
+            Finish
+          </button>
+        </div>
               </li>
             ))}
 
@@ -284,8 +396,8 @@ export default function Home() {
                 <div className="bg-white rounded-lg p-6 shadow-lg">
                   <h2 className="text-xl font-bold text-gray-800 mb-4">Confirm Deletion</h2>
                   <p className="text-gray-600 mb-6">
-                    Are you sure you want to delete the habit <strong>{habitToDelete.name}</strong>? This
-                    habit will not be recurring again.
+                    Are you sure you want to finish the habit <strong>{habitToDelete.name}</strong>? This
+                    habit will not be recurring again. It will be added to your total finished
                   </p>
                   <div className="flex justify-end gap-4">
                     <button
@@ -308,7 +420,6 @@ export default function Home() {
               </div>
             )}
           </ul>
-
         )}
       </div>
     </main>
