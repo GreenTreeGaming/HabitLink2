@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { FaHistory, FaHome, FaUsers, FaTrophy, FaMedal, FaStar, FaVideo } from "react-icons/fa"; // Import FaMedal for Badges
+import { FaHistory, FaHome, FaUsers, FaTrophy, FaMedal, FaStar, FaVideo, FaInfoCircle, FaInfo } from "react-icons/fa"; // Import FaInfoCircle for About
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
@@ -109,17 +109,18 @@ export default function Sidebar() {
                 <span>Badges</span>
               </button>
             </li>
-            {/*Tutorials */}
+
+            {/* Tutorials */}
             <li>
               <button
                 onClick={() => {
                   setIsOpen(false); // Close the sidebar
-                  router.push("/tutorials"); // Navigate to Badges
+                  router.push("/about"); // Navigate to Tutorials
                 }}
                 className="flex items-center gap-3 w-full text-left px-4 py-2 bg-green-100 rounded-lg hover:bg-green-200"
               >
-                <FaVideo className="text-green-600" /> {/* Badges Icon */}
-                <span>Operational Tutorials</span>
+                <FaInfoCircle className="text-green-600" /> {/* Tutorials Icon */}
+                <span>About Us</span>
               </button>
             </li>
           </ul>
