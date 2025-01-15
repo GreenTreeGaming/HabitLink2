@@ -1,6 +1,6 @@
 import clientPromise from "@/lib/mongodb";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/utils/authOptions";
 import { ObjectId } from "mongodb";
 
 export async function GET(req: Request) {
