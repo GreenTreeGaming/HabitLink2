@@ -3,6 +3,21 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/utils/authOptions";
 import { ObjectId } from "mongodb";
 
+interface Team {
+  _id: ObjectId;
+  name: string;
+  members: string[];
+  creatorEmail: string;
+  createdAt: Date;
+}
+
+interface TeamUpdateOperation {
+  $set?: Partial<Team>;
+  $pull?: {
+    members: string;
+  };
+}
+
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
   if (!session) {
@@ -113,6 +128,10 @@ export async function PATCH(req: Request) {
     return new Response("Unauthorized", { status: 401 });
   }
 
+  if (!session?.user?.email) {
+    return new Response("Unauthorized", { status: 401 });
+  }
+
   const client = await clientPromise;
   const db = client.db("habitlink");
 
@@ -168,7 +187,7 @@ export async function PATCH(req: Request) {
         { $pull: { members: memberEmail } }
       );
 
-      const updatedTeam = await db.collection("teams").findOne({ _id: new ObjectId(teamId) });
+      const updatedTeam: any = await db.collection("teams").findOne({ _id: new ObjectId(teamId) });
       const memberDetails = await db
         .collection("users")
         .find({ email: { $in: updatedTeam.members } })
@@ -197,17 +216,23 @@ export async function PATCH(req: Request) {
           return new Response(JSON.stringify({ error: "Invalid new captain email" }), { status: 400 });
         }
 
-        await db.collection("teams").updateOne(
+        const updateOperation: TeamUpdateOperation = {
+          $set: { creatorEmail: newCaptainEmail },
+          $pull: { members: session.user.email }
+        };
+
+        await db.collection<Team>("teams").updateOne(
           { _id: new ObjectId(teamId) },
-          {
-            $set: { creatorEmail: newCaptainEmail },
-            $pull: { members: session.user.email },
-          }
+          updateOperation
         );
       } else {
-        await db.collection("teams").updateOne(
+        const updateOperation: TeamUpdateOperation = {
+          $pull: { members: session.user.email }
+        };
+
+        await db.collection<Team>("teams").updateOne(
           { _id: new ObjectId(teamId) },
-          { $pull: { members: session.user.email } }
+          updateOperation
         );
       }
 

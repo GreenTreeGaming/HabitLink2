@@ -28,13 +28,13 @@ export default function HabitList({ habits, updateProgress }: HabitListProps) {
                     {habit.name} {remaining <= 0 && "✔️"}
                   </p>
                   <p className="text-sm text-gray-500">
-                    Type: <span className="font-medium">{habit.type}</span>
+                    Type: <span className="font-medium">{habit.unit}</span>
                   </p>
                   <p className="text-sm text-gray-500">
                     Progress: {habit.progress}/{habit.goal} ({habit.frequency})
                   </p>
                   <p className="text-xs text-gray-400">
-                    Target: {habit.frequency} goal - {habit.goal} ({habit.type})
+                    Target: {habit.frequency} goal - {habit.goal} ({habit.unit})
                   </p>
                 </div>
                 {remaining > 0 && (
