@@ -1,7 +1,12 @@
 import type { NextConfig } from "next";
 
-async function triggerScheduler() {
- if (typeof window === "undefined") {
+const nextConfig: NextConfig = {
+  /* config options */
+  ignoreBuildErrors: true,
+};
+
+const triggerScheduler = async () => {
+  if (typeof window === "undefined") {
     const baseUrl =
       process.env.VERCEL_URL
         ? `https://${process.env.VERCEL_URL}` // Ensure https protocol
@@ -14,12 +19,9 @@ async function triggerScheduler() {
       console.error("Failed to initialize scheduler:", err);
     }
   }
-
-triggerScheduler();
-
-const nextConfig: NextConfig = {
-  /* config options */
-  ignoreBuildErrors: true,
 };
+
+// Ensure scheduler is triggered as part of the server lifecycle
+triggerScheduler();
 
 export default nextConfig;
