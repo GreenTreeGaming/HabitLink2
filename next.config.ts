@@ -3,7 +3,9 @@ import type { NextConfig } from "next";
 async function triggerScheduler() {
  if (typeof window === "undefined") {
     const baseUrl =
-      process.env.VERCEL_URL || process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+      process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}` // Ensure https protocol
+        : process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
 
     try {
       // Use the base URL to make a request
@@ -12,7 +14,6 @@ async function triggerScheduler() {
       console.error("Failed to initialize scheduler:", err);
     }
   }
-}
 
 triggerScheduler();
 
