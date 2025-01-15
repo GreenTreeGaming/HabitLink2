@@ -7,24 +7,36 @@ export async function GET(req: Request) {
   const email = req.headers.get("x-user-email");
 
   try {
-    // Fetch individual leaderboard
+    // Define the type for individual leaderboard
     const individualLeaderboard = await db
       .collection("users")
       .find({ habitsFinished: { $gt: 0 } })
       .sort({ habitsFinished: -1 })
       .limit(15)
-      .project({ _id: 1, name: 1, email: 1, image: 1, habitsFinished: 1 })
+      .project<{ _id: string; name: string; email: string; image: string; habitsFinished: number }>({
+        _id: 1,
+        name: 1,
+        email: 1,
+        image: 1,
+        habitsFinished: 1,
+      })
       .toArray();
 
-    // Fetch team leaderboard
+    // Define the type for team leaderboard
+    type TeamLeaderboardEntry = {
+      _id: string;
+      name: string;
+      habitsFinished: number;
+    };
+
     const teams = await db.collection("teams").find().toArray();
-    const teamLeaderboard = [];
+    const teamLeaderboard: TeamLeaderboardEntry[] = [];
 
     for (const team of teams) {
       const teamMembers = await db
         .collection("users")
         .find({ email: { $in: team.members } })
-        .project({ habitsFinished: 1 })
+        .project<{ habitsFinished: number }>({ habitsFinished: 1 })
         .toArray();
 
       const totalHabitsFinished = teamMembers.reduce(
@@ -43,7 +55,7 @@ export async function GET(req: Request) {
     teamLeaderboard.sort((a, b) => b.habitsFinished - a.habitsFinished);
 
     // Fetch the current user's data
-    let user = null;
+    let user: any = null;
     if (email) {
       user = await db.collection("users").findOne(
         { email },
@@ -63,6 +75,7 @@ export async function GET(req: Request) {
     );
   } catch (error) {
     console.error("Error fetching leaderboard:", error);
+
     return new Response(
       JSON.stringify({ error: "Failed to fetch leaderboard" }),
       { status: 500 }
