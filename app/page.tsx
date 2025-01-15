@@ -11,6 +11,8 @@ import 'react-toastify/dist/ReactToastify.css';
 
 
 interface Habit {
+  frequency: string;
+  unit: string;
   _id: string;
   name: string;
   goal: number;
